@@ -1,0 +1,35 @@
+{
+  "name": "jackal-s3-adapter",
+  "version": "1.0.0",
+  "description": "S3-compatible server that wraps Jackal.js",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --inspect=4321 src/index.ts"
+  },
+  "keywords": [
+    "jackal",
+    "s3",
+    "storage",
+    "decentralized"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/cors": "^8.3.0",
+    "@fastify/multipart": "^7.7.3",
+    "@jackallabs/jackal.js": "file:jackallabs-jackal.js-3.7.0.tgz",
+    "dotenv": "^16.3.1",
+    "fast-xml-parser": "^4.2.5",
+    "fastify": "^4.19.2",
+    "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.2",
+    "@types/ws": "^8.18.0",
+    "pino-pretty": "^13.0.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.1.6"
+  }
+}
