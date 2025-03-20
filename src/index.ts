@@ -253,11 +253,15 @@ server.put('/:bucket/*', {
             }
         );
         // Change directory to the bucket
-        await openFolder(`Home/${BASE_FOLDER}/${bucket}`);
+        const p = `Home/${BASE_FOLDER}/${bucket}`
+
+        await openFolder(p);
 
         // Upload file
         await storageHandler.queuePrivate(file);
         await storageHandler.processAllQueues();
+        await storageHandler.loadDirectory({path: p});
+        console.log(storageHandler.listChildFileMetas())
 
         reply.status(200).send();
     } catch (error) {
