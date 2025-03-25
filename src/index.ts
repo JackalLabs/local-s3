@@ -1,24 +1,24 @@
-import { config } from 'dotenv';
-import fastify, { FastifyRequest, FastifyReply } from 'fastify';
+import {config} from 'dotenv';
+import fastify, {FastifyReply, FastifyRequest} from 'fastify';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCors from '@fastify/cors';
 import {ClientHandler, IClientHandler, IStorageHandler, StorageHandler} from '@jackallabs/jackal.js';
-import { createHmac } from 'crypto';
-import { Buffer } from 'buffer';
+import {Buffer} from 'buffer';
 import {XMLBuilder, XMLParser} from 'fast-xml-parser';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
-import { mainnet } from './utils';
+import {Readable} from 'stream';
+import {mainnet} from './utils';
 
 import WebSocket from 'ws';
 import path from "path";
 import fs from "fs";
 import os from "os";
+import {Queue} from "./queue";
+
 Object.assign(global, { WebSocket: WebSocket });
 // Load environment variables
 config();
 
-const TEMP_DIR = path.join(os.tmpdir(), 'jackal-s3-server');
+const TEMP_DIR = path.join(os.tmpdir(), 'jackal-s3');
 if (!fs.existsSync(TEMP_DIR)) {
     fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
@@ -89,8 +89,20 @@ const builder = new XMLBuilder({
     attributeNamePrefix: "@_"
 });
 
+function createS3ErrorResponse(code: string, message: string, resource: string = '', requestId: string = ''): string {
+    return builder.build({
+        Error: {
+            Code: code,
+            Message: message,
+            Resource: resource || null,
+            RequestId: requestId || 'jackal-s3-request'
+        }
+    });
+}
+
+const q = new Queue();
+
 async function openFolder(path: string, count: number = 0): Promise<void> {
-    console.log("opening", path);
 
     if (count >= 10) {
         throw new Error(`Failed to open folder after 10 attempts: ${path}`);
@@ -99,7 +111,7 @@ async function openFolder(path: string, count: number = 0): Promise<void> {
     try {
         await storageHandler.loadDirectory({ path });
     } catch (error) {
-        console.log("Failed to load folder, trying again");
+        console.log("Failed to load folder, trying again", path);
         await new Promise(resolve => setTimeout(resolve, 1000));
         return openFolder(path, count + 1);
     }
@@ -143,7 +155,7 @@ async function initJackalClients() {
         }
 
         const initPool = {
-            // jkl1h7mssuydzhgc3jwwrvu922cau9jnd0akzp7n0u: "https://node1.jackalstorageprovider40.com",
+            jkl1h7mssuydzhgc3jwwrvu922cau9jnd0akzp7n0u: "https://node1.jackalstorageprovider40.com",
             jkl10kvlcwwntw2nyccz4hlgl7ltp2gyvvfrtae5x6: "https://pod-04.jackalstorage.online",
             jkl10nf7agseed0yrke6j79xpzattkjdvdrpls3g22: "https://pod-01.jackalstorage.online",
             jkl1t5708690gf9rc3mmtgcjmn9padl8va5g03f9wm: "https://mprov01.jackallabs.io",
@@ -200,14 +212,14 @@ server.put('/:bucket/', {
 
         // Create folder
         await openFolder(`Home/${BASE_FOLDER}`)
-        await storageHandler.createFolders({ names: bucket });
+        await q.add(() => storageHandler.createFolders({names: bucket}))
         await openFolder( `Home/${BASE_FOLDER}`)
         await openFolder( `Home/${BASE_FOLDER}/${bucket}`)
 
         reply.status(200).send();
     } catch (error) {
         request.log.error(error);
-        reply.status(500).send({ error: 'Failed to create bucket' });
+        reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to make bucket"));
     }
 });
 
@@ -219,24 +231,47 @@ server.delete('/:bucket/', {
         const { bucket } = request.params as { bucket: string };
 
         // Delete folder
-        await storageHandler.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}`} );
+        await q.add(() => storageHandler.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}`} ));
 
         reply.status(204).send();
     } catch (error) {
         request.log.error(error);
-        reply.status(500).send({ error: 'Failed to delete bucket' });
+        reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to delete bucket"));
     }
 });
 
+// DeleteObject - Deletes a file in Jackal.js
+server.delete('/:bucket/*', {
+    preHandler: authenticate
+}, async (request, reply) => {
+    try {
+        const { bucket } = request.params as { bucket: string };
+        const u = request.url.split("?")[0]
+        const key = u.split(`/${bucket}/`)[1];
+        // Extract the object key from the URL (everything after the bucket)
+        const encodedObjectKey = encodeObjectName(key);
+
+        // Delete file
+        await q.add(() => storageHandler.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}/${encodedObjectKey}` } ));
+
+        reply.status(204).send();
+    } catch (error) {
+        request.log.error(error);
+        reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to delete object"));
+    }
+});
+
+// Upload object
 server.put('/:bucket/*', {
     preHandler: authenticate
 }, async (request, reply) => {
     try {
         const { bucket } = request.params as { bucket: string };
-        const key = request.url.split(`/${bucket}/`)[1];
-
+        const u = request.url.split("?")[0]
+        const key = u.split(`/${bucket}/`)[1];
         // Extract the object key from the URL (everything after the bucket)
         const encodedObjectKey = encodeObjectName(key);
+
 
         const tempFilePath = path.join(TEMP_DIR, `${Date.now()}-${path.basename(encodedObjectKey)}`);
 
@@ -259,14 +294,13 @@ server.put('/:bucket/*', {
 
         // Upload file
         await storageHandler.queuePrivate(file);
-        await storageHandler.processAllQueues();
+        await q.add(() => storageHandler.processAllQueues());
         await storageHandler.loadDirectory({path: p});
-        console.log(storageHandler.listChildFileMetas())
 
         reply.status(200).send();
     } catch (error) {
         request.log.error(error);
-        reply.status(500).send({ error: 'Failed to upload object' });
+        reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to upload object"));
     }
 });
 
@@ -277,17 +311,16 @@ server.get('/:bucket/*', {
     try {
         const { bucket } = request.params as { bucket: string };
 
-        // Extract the object key from the URL (everything after the bucket)
-        const key = request.url.split(`/${bucket}/`)[1];
+        const u = request.url.split("?")[0]
+        const key = u.split(`/${bucket}/`)[1];
+
         const encodedObjectKey = encodeObjectName(key);
 
-        console.log(bucket, encodedObjectKey)
 
         await openFolder( `Home/${BASE_FOLDER}/${bucket}`)
 
         // Construct the path
         const filePath = `Home/${BASE_FOLDER}/${bucket}/${encodedObjectKey}`;
-        console.log(filePath)
         const fileMeta = await storageHandler.getFileMetaData(filePath);
 
         // Set up download tracker
@@ -299,22 +332,26 @@ server.get('/:bucket/*', {
         // Download file
         const file = await storageHandler.downloadFile(filePath, trackers);
 
+
         // Set headers
         reply.header('Content-Type', fileMeta.fileMeta.type || 'application/octet-stream');
         reply.header('Content-Length', fileMeta.fileMeta.size);
         reply.header('Last-Modified', new Date(fileMeta.fileMeta.lastModified).toUTCString());
-        reply.header('ETag', `"${file.lastModified.toString()}"`);
+        reply.header('ETag', `"${fileMeta.fileMeta.lastModified.toString()}"`);
 
         // Create a readable stream from the file
+
         const buffer = Buffer.from(await file.arrayBuffer());
         const fileStream = Readable.from(buffer);
 
         // Stream the file to the response
-        await pipeline(fileStream, reply.raw);
+        return reply.send(fileStream);
+
+        // await pipeline(fileStream, reply.raw);
 
     } catch (error) {
         request.log.error(error);
-        reply.status(404).send({ error: 'Object not found' });
+        reply.status(404).send(createS3ErrorResponse("NoSuchKey", "Object not found"));
     }
 });
 
@@ -355,7 +392,7 @@ server.get('/', {
         reply.send(response);
     } catch (error) {
         request.log.error(error);
-        reply.status(500).send({ error: 'Failed to list buckets' });
+        reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to list buckets"));
     }
 });
 
@@ -479,7 +516,7 @@ server.get('/:bucket/', {
         return reply.send(response);
     } catch (error) {
         request.log.error(error);
-        reply.status(500).send({ error: 'Failed to list objects' });
+        reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to list objects"));
     }
 });
 
