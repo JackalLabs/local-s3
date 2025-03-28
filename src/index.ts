@@ -23,6 +23,17 @@ if (!fs.existsSync(TEMP_DIR)) {
     fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
+const initPool = {
+    // jkl1h7mssuydzhgc3jwwrvu922cau9jnd0akzp7n0u: "https://node1.jackalstorageprovider40.com",
+    // jkl10kvlcwwntw2nyccz4hlgl7ltp2gyvvfrtae5x6: "https://pod-04.jackalstorage.online",
+    // jkl10nf7agseed0yrke6j79xpzattkjdvdrpls3g22: "https://pod-01.jackalstorage.online",
+    // jkl1t5708690gf9rc3mmtgcjmn9padl8va5g03f9wm: "https://mprov01.jackallabs.io",
+    jkl1esjprqperjzwspaz6er7azzgqkvsa6n5kljv05: "https://mprov02.jackallabs.io",
+    // jkl10de5s5ylu0ve0zqh9cx7k908j4hsu0rmqrld6e: "https://pod2.europlots.net",
+    // jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "https://jklstorage1.squirrellogic.com",
+    // jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "https://jklstorage2.squirrellogic.com",
+}
+
 // Environment variables
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const ACCESS_KEY = process.env.ACCESS_KEY || 'test';
@@ -47,7 +58,7 @@ const server = fastify({
             }
         }
     },
-    bodyLimit: 100 * 1024 * 1024, // 100MB
+    bodyLimit: 32 * 1024 * 1024 * 1024, // 32gb
 });
 
 // Add XML content type parser
@@ -70,6 +81,27 @@ server.addContentTypeParser('application/octet-stream', function (request: any, 
         done(null, buffer)
     })
     payload.on('error', (err: Error) => { done(err) })
+})
+
+server.addContentTypeParser('*', function (request, payload, done) {
+    // Skip if we have a specialized handler for this content type
+    if (!request.headers['content-type']) {
+        done(null)
+        return
+    }
+
+    if (server.hasContentTypeParser(request.headers['content-type'])) {
+        done(null)
+        return
+    }
+
+    const data: Buffer[] = []
+    payload.on('data', chunk => { data.push(chunk) })
+    payload.on('end', () => {
+        const buffer = Buffer.concat(data)
+        done(null, buffer)
+    })
+    payload.on('error', err => { done(err) })
 })
 
 server.register(fastifyMultipart, {
@@ -154,16 +186,7 @@ async function initJackalClients() {
             await openFolder("Home");
         }
 
-        const initPool = {
-            jkl1h7mssuydzhgc3jwwrvu922cau9jnd0akzp7n0u: "https://node1.jackalstorageprovider40.com",
-            jkl10kvlcwwntw2nyccz4hlgl7ltp2gyvvfrtae5x6: "https://pod-04.jackalstorage.online",
-            jkl10nf7agseed0yrke6j79xpzattkjdvdrpls3g22: "https://pod-01.jackalstorage.online",
-            jkl1t5708690gf9rc3mmtgcjmn9padl8va5g03f9wm: "https://mprov01.jackallabs.io",
-            jkl1esjprqperjzwspaz6er7azzgqkvsa6n5kljv05: "https://mprov02.jackallabs.io",
-            jkl10de5s5ylu0ve0zqh9cx7k908j4hsu0rmqrld6e: "https://pod2.europlots.net",
-            jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "https://jklstorage1.squirrellogic.com",
-            jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "https://jklstorage2.squirrellogic.com",
-        }
+
         await storageHandler.loadProviderPool(initPool)
 
         console.log('Jackal.js client initialized successfully');
@@ -292,12 +315,15 @@ server.put('/:bucket/*', {
 
         await openFolder(p);
 
-        // Upload file
-        await storageHandler.queuePrivate(file);
-        await q.add(() => storageHandler.processAllQueues());
-        await storageHandler.loadDirectory({path: p});
+        const k = () => {
+            reply.status(200).send()
+        }
 
-        reply.status(200).send();
+        // Upload file
+        await storageHandler.queuePrivate(file)
+        await q.add(() => storageHandler.processAllQueues({callback: k}))
+        await storageHandler.loadDirectory({path: p})
+
     } catch (error) {
         request.log.error(error);
         reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to upload object"));
@@ -404,6 +430,19 @@ server.get('/:bucket/', {
         const { bucket } = request.params as { bucket: string };
         const query = request.query as any;
 
+        // Handle versioning query
+        if ('versioning' in query) {
+            const response = builder.build({
+                VersioningConfiguration: {
+                    "@_xmlns": 'http://s3.amazonaws.com/doc/2006-03-01/',
+                    Status: 'Suspended' // Or 'Enabled' if you plan to support versioning
+                }
+            });
+
+            reply.header('Content-Type', 'application/xml');
+            return reply.send(response);
+        }
+
         // Determine if this is a V1 or V2 request
         const isV2 = 'list-type' in query && query['list-type'] === '2';
 
@@ -485,8 +524,8 @@ server.get('/:bucket/', {
                     MaxKeys: maxKeys,
                     Delimiter: delimiter || null,
                     IsTruncated: false, // Simplified - we don't handle pagination yet
-                    Contents: contents.length > 0 ? contents : null,
-                    CommonPrefixes: commonPrefixes.length > 0 ? commonPrefixes : null
+                    Contents: contents.length > 0 ? (contents.length === 1 ? [contents[0]] : contents) : [],
+                    CommonPrefixes: commonPrefixes.length > 0 ? commonPrefixes : []
                 }
             });
 
@@ -507,8 +546,8 @@ server.get('/:bucket/', {
                 KeyCount: contents.length,
                 ContinuationToken: continuationToken || null,
                 NextContinuationToken: null, // No pagination for now
-                Contents: contents.length > 0 ? contents : null,
-                CommonPrefixes: commonPrefixes.length > 0 ? commonPrefixes : null
+                Contents: contents.length > 0 ? (contents.length === 1 ? [contents[0]] : contents) : [],
+                CommonPrefixes: commonPrefixes.length > 0 ? commonPrefixes : []
             }
         });
 
