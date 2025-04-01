@@ -284,6 +284,127 @@ server.delete('/:bucket/*', {
     }
 });
 
+
+
+const multiParts: Record<string, number> = {}
+
+// Multipart form upload
+server.post('/:bucket/*', {
+    preHandler: authenticate
+}, async (request, reply) => {
+    try {
+        const { bucket } = request.params as { bucket: string };
+        const u = request.url.split("?")[0];
+        const key = u.split(`/${bucket}/`)[1];
+        const encodedObjectKey = encodeObjectName(key);
+
+        const query = request.query as any;
+        console.log(query);
+        const uploadId = query.uploadId;
+
+        if (uploadId) { // completing file upload
+            // Make sure the multipart upload exists
+            if (!(encodedObjectKey in multiParts)) {
+                reply.status(404).send(createS3ErrorResponse("NoSuchUpload", "Upload does not exist"));
+                return;
+            }
+
+            const count = multiParts[encodedObjectKey];
+            const outputFilePath = path.join(TEMP_DIR, `complete-${encodedObjectKey}`);
+
+            // Stream approach for large files
+            const writeStream = fs.createWriteStream(outputFilePath);
+
+            try {
+                // Process each part sequentially
+                for (let i = 1; i <= count; i++) {
+                    const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`);
+
+                    if (!fs.existsSync(tempFilePath)) {
+                        throw new Error(`Part ${i} missing: ${tempFilePath}`);
+                    }
+
+                    // Use pipe to efficiently stream each part to the output file
+                    await new Promise<void>((resolve, reject) => {
+                        const readStream = fs.createReadStream(tempFilePath);
+                        readStream.pipe(writeStream, { end: false });
+                        readStream.on('end', resolve);
+                        readStream.on('error', reject);
+                    });
+                }
+
+                // Close the write stream
+                writeStream.end();
+
+                // Wait for the write to complete
+                await new Promise<void>((resolve) => writeStream.on('close', resolve));
+
+                // Change directory to the bucket
+                const p = `Home/${BASE_FOLDER}/${bucket}`;
+                await openFolder(p);
+
+                const k = async () => {
+                    // Clean up temp files
+                    for (let i = 1; i <= count; i++) {
+                        const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`);
+                        try { fs.unlinkSync(tempFilePath); } catch (e) { /* ignore */ }
+                    }
+                    try { fs.unlinkSync(outputFilePath); } catch (e) { /* ignore */ }
+
+                    // Remove the multipart entry
+                    delete multiParts[encodedObjectKey];
+
+                    reply.status(200).send();
+                };
+
+                // Create a BinaryLike object using fs.promises.readFile
+                // For large files, you may need to use additional approaches
+                // such as streaming through a transformation pipeline
+                const fileContent = await fs.promises.readFile(outputFilePath);
+
+                // Create File object for Jackal
+                const file = new File(
+                    [fileContent],
+                    encodedObjectKey,
+                    {
+                        type: request.headers['content-type'] || 'application/octet-stream',
+                        lastModified: Date.now()
+                    }
+                );
+
+                console.log("FILE: ", file.size, file.name);
+
+                // Upload file
+                await storageHandler.queuePrivate(file);
+                await q.add(() => storageHandler.processAllQueues({callback: k}));
+                await storageHandler.loadDirectory({path: p});
+                return;
+            } catch (error) {
+                writeStream.destroy();
+                throw error;
+            }
+        }
+
+        // New file upload
+        multiParts[encodedObjectKey] = 0;
+
+        const response = builder.build({
+            InitiateMultipartUploadResult: {
+                "@_xmlns": 'http://s3.amazonaws.com/doc/2006-03-01/',
+                Bucket: bucket,
+                Key: key,
+                UploadId: encodedObjectKey,
+            }
+        });
+
+        reply.header('Content-Type', 'application/xml');
+        reply.send(response);
+    } catch (error) {
+        request.log.error(error);
+        reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to upload object"));
+    }
+});
+
 // Upload object
 server.put('/:bucket/*', {
     preHandler: authenticate
@@ -295,21 +416,48 @@ server.put('/:bucket/*', {
         // Extract the object key from the URL (everything after the bucket)
         const encodedObjectKey = encodeObjectName(key);
 
+        const query = request.query as any;
+        console.log(query)
+        const uploadId = query.uploadId;
+        const partNumber = query.partNumber;
+        console.log("upload details", uploadId, partNumber)
+        if (uploadId) {
+
+            if (encodedObjectKey in multiParts) {
+                const count = multiParts[encodedObjectKey];
+                multiParts[encodedObjectKey] = count + 1
+
+                // writing part to disk
+                const tempFilePath = path.join(TEMP_DIR, `${partNumber}-${path.basename(encodedObjectKey)}`);
+                const data = request.body as Buffer;
+                fs.writeFileSync(tempFilePath, data);
+
+                return
+            } else {
+                reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to find upload"));
+            }
+            return
+        }
 
         const tempFilePath = path.join(TEMP_DIR, `${Date.now()}-${path.basename(encodedObjectKey)}`);
 
         const data = request.body as Buffer;
         fs.writeFileSync(tempFilePath, data);
 
+        const f = fs.readFileSync(tempFilePath)
+
         // Create File object for Jackal
         const file = new File(
-            [fs.readFileSync(tempFilePath)],
+            [f],
             encodedObjectKey,
             {
                 type: request.headers['content-type'] || 'application/octet-stream',
                 lastModified: Date.now()
             }
         );
+
+        console.log("FILE: ", file.size, file.name)
+
         // Change directory to the bucket
         const p = `Home/${BASE_FOLDER}/${bucket}`
 
