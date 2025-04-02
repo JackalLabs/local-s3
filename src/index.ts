@@ -23,7 +23,10 @@ if (!fs.existsSync(TEMP_DIR)) {
     fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
-const initPool = {
+const TESTNET_PROVIDERS = {
+    jkl1nayh6fux2a9ht0jzu9kjd60drufx5upaq7w72a: "https://testnet-provider.jackallabs.io",
+}
+const MAINNET_PROVIDERS = {
     // jkl1h7mssuydzhgc3jwwrvu922cau9jnd0akzp7n0u: "https://node1.jackalstorageprovider40.com",
     // jkl10kvlcwwntw2nyccz4hlgl7ltp2gyvvfrtae5x6: "https://pod-04.jackalstorage.online",
     // jkl10nf7agseed0yrke6j79xpzattkjdvdrpls3g22: "https://pod-01.jackalstorage.online",
@@ -33,6 +36,7 @@ const initPool = {
     jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "https://jklstorage1.squirrellogic.com",
     jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "https://jklstorage2.squirrellogic.com",
 }
+const initPool = process.env.NETWORK == "testnet" ? TESTNET_PROVIDERS : MAINNET_PROVIDERS
 
 // Environment variables
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -377,8 +381,8 @@ server.post('/:bucket/*', {
 
                 // Upload file
                 await storageHandler.queuePrivate(file);
-                await q.add(() => storageHandler.processAllQueues({callback: k}));
-                await storageHandler.loadDirectory({path: p});
+                await q.add(() => storageHandler.processAllQueues({ callback: k }));
+                await storageHandler.loadDirectory({ path: p });
                 return;
             } catch (error) {
                 writeStream.destroy();

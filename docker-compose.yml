@@ -10,10 +10,11 @@ services:
     ports:
       - "3010:3000"
     environment:
-      - JACKAL_MNEMONIC=${JACKAL_MNEMONIC}
-      - ACCESS_KEY_ID=jackal
-      - SECRET_ACCESS_KEY=jackalsecret
+      - JKL_MNEMONIC=${JKL_MNEMONIC}
+      - ACCESS_KEY=jackal
+      - SECRET_KEY=jackalsecret
       - PORT=3000
+      - NETWORK=testnet
     volumes:
       - jackal-s3:/tmp/jackal-s3
 
