@@ -33,6 +33,7 @@ This is an S3-compatible server that wraps the Jackal.js library, enabling you t
    SECRET_KEY=your_secret_key
    JKL_MNEMONIC=your_mnemonic_phrase_here
    PORT=3000
+   NETWORK=testnet
    ```
 4. Build the project:
    ```
