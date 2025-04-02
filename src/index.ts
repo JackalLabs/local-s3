@@ -1,18 +1,18 @@
-import {config} from 'dotenv';
-import fastify, {FastifyReply, FastifyRequest} from 'fastify';
+import { config } from 'dotenv';
+import fastify, { FastifyReply, FastifyRequest } from 'fastify';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCors from '@fastify/cors';
-import {ClientHandler, IClientHandler, IStorageHandler, StorageHandler} from '@jackallabs/jackal.js';
-import {Buffer} from 'buffer';
-import {XMLBuilder, XMLParser} from 'fast-xml-parser';
-import {Readable} from 'stream';
-import {mainnet} from './utils';
+import { ClientHandler, IClientHandler, IStorageHandler, StorageHandler } from '@jackallabs/jackal.js';
+import { Buffer } from 'buffer';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import { Readable } from 'stream';
+import { mainnet, testnet } from './utils';
 
 import WebSocket from 'ws';
 import path from "path";
 import fs from "fs";
 import os from "os";
-import {Queue} from "./queue";
+import { Queue } from "./queue";
 
 Object.assign(global, { WebSocket: WebSocket });
 // Load environment variables
@@ -39,6 +39,7 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const ACCESS_KEY = process.env.ACCESS_KEY || 'test';
 const SECRET_KEY = process.env.SECRET_KEY || 'test';
 const JKL_MNEMONIC = process.env.JKL_MNEMONIC || '';
+const NETWORK = process.env.NETWORK == "testnet" ? testnet : mainnet
 const BASE_FOLDER = 'S3Buckets'
 
 if (!JKL_MNEMONIC) {
@@ -65,7 +66,7 @@ const server = fastify({
 server.addContentTypeParser('application/xml', { parseAs: 'string' }, (req, body, done) => {
     try {
         // Parse XML to JS object using your XML parser
-        const xmlParser = new XMLParser({/* options */});
+        const xmlParser = new XMLParser({/* options */ });
         const parsedXml = xmlParser.parse(body);
         done(null, parsedXml);
     } catch (error: any) {
@@ -166,7 +167,7 @@ let storageHandler: IStorageHandler;
 async function initJackalClients() {
     try {
         clientHandler = await ClientHandler.connect({
-            ...mainnet,
+            ...NETWORK,
             selectedWallet: 'mnemonic',
             mnemonic: JKL_MNEMONIC
         });
@@ -235,9 +236,9 @@ server.put('/:bucket/', {
 
         // Create folder
         await openFolder(`Home/${BASE_FOLDER}`)
-        await q.add(() => storageHandler.createFolders({names: bucket}))
-        await openFolder( `Home/${BASE_FOLDER}`)
-        await openFolder( `Home/${BASE_FOLDER}/${bucket}`)
+        await q.add(() => storageHandler.createFolders({ names: bucket }))
+        await openFolder(`Home/${BASE_FOLDER}`)
+        await openFolder(`Home/${BASE_FOLDER}/${bucket}`)
 
         reply.status(200).send();
     } catch (error) {
@@ -254,7 +255,7 @@ server.delete('/:bucket/', {
         const { bucket } = request.params as { bucket: string };
 
         // Delete folder
-        await q.add(() => storageHandler.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}`} ));
+        await q.add(() => storageHandler.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}` }));
 
         reply.status(204).send();
     } catch (error) {
@@ -275,7 +276,7 @@ server.delete('/:bucket/*', {
         const encodedObjectKey = encodeObjectName(key);
 
         // Delete file
-        await q.add(() => storageHandler.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}/${encodedObjectKey}` } ));
+        await q.add(() => storageHandler.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}/${encodedObjectKey}` }));
 
         reply.status(204).send();
     } catch (error) {
@@ -321,8 +322,8 @@ server.put('/:bucket/*', {
 
         // Upload file
         await storageHandler.queuePrivate(file)
-        await q.add(() => storageHandler.processAllQueues({callback: k}))
-        await storageHandler.loadDirectory({path: p})
+        await q.add(() => storageHandler.processAllQueues({ callback: k }))
+        await storageHandler.loadDirectory({ path: p })
 
     } catch (error) {
         request.log.error(error);
@@ -343,7 +344,7 @@ server.get('/:bucket/*', {
         const encodedObjectKey = encodeObjectName(key);
 
 
-        await openFolder( `Home/${BASE_FOLDER}/${bucket}`)
+        await openFolder(`Home/${BASE_FOLDER}/${bucket}`)
 
         // Construct the path
         const filePath = `Home/${BASE_FOLDER}/${bucket}/${encodedObjectKey}`;
