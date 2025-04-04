@@ -52,6 +52,15 @@ For development, you can use the watch mode:
 npm run dev
 ```
 
+Or you can build the Docker container and then run test scripts
+```
+export JKL_MNEMONIC=[your seed]
+docker build .
+docker-compose up
+node test.mjs
+
+```
+
 ## Using with S3 Clients
 
 You can use any S3-compatible client with this server. Here's an example using the AWS SDK for JavaScript:
