@@ -36,7 +36,8 @@ const MAINNET_PROVIDERS = {
     jkl1dht8meprya6jr7w9g9zcp4p98ccxvckufvu4zc: "https://jklstorage1.squirrellogic.com",
     jkl1nfnmjk7k59xc3q7wgtva7xahkg3ltjtgs3le93: "https://jklstorage2.squirrellogic.com",
 }
-const initPool = process.env.NETWORK == "testnet" ? TESTNET_PROVIDERS : MAINNET_PROVIDERS
+const initPool = process.env.NETWORK == "testnet" ? TESTNET_PROVIDERS : MAINNET_PROVIDERS;
+console.log("Provider pool: ", initPool);
 
 // Environment variables
 const PORT = parseInt(process.env.PORT || '3000', 10);

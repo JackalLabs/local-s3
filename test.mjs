@@ -7,7 +7,7 @@ import {
 
 const jackalS3 = new S3Client({
   region: "us-east-1", // required
-  endpoint: "http://localhost:3010", // 3000 local, 3010 docker
+  endpoint: "http://localhost:3000", // 3000 local, 3010 docker
   credentials: {
     accessKeyId: "jackal",
     secretAccessKey: "jackalsecret",
@@ -15,7 +15,10 @@ const jackalS3 = new S3Client({
   forcePathStyle: true, // required
 });
 
-await jackalS3.send(new CreateBucketCommand({ Bucket: "test_bucket" }));
+const createBucketResponse = await jackalS3.send(
+  new CreateBucketCommand({ Bucket: "test_bucket" })
+);
+console.log("createBucketResponse", createBucketResponse);
 
 const putObjectResponse = await jackalS3.send(
   new PutObjectCommand({
@@ -26,7 +29,10 @@ const putObjectResponse = await jackalS3.send(
 );
 console.log("putObjectResponse", putObjectResponse);
 
-const getObjectResponse = await jackalS3.send(
-  new GetObjectCommand({ Bucket: "test_bucket", Key: "test_key" })
-);
-console.log("getObjectResponse", getObjectResponse);
+setTimeout(async () => {
+  const getObjectResponse = await jackalS3.send(
+    new GetObjectCommand({ Bucket: "test_bucket", Key: "test_key" })
+  );
+  console.log("getObjectResponse", getObjectResponse);
+  console.log(await getObjectResponse.Body.transformToString());
+}, 300 * 1000);
