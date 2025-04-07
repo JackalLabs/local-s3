@@ -1,16 +1,16 @@
-import dotenv from 'dotenv';
+import dotenv from 'dotenv'
 import fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import fastifyCors from '@fastify/cors';
-import { Buffer } from 'buffer';
-import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { Readable } from 'stream';
+import fastifyCors from '@fastify/cors'
+import { Buffer } from 'buffer'
+import { XMLBuilder, XMLParser } from 'fast-xml-parser'
+import { Readable } from 'stream'
 import { IFileMetaData, IFolderMetaData } from '@jackallabs/jackal.js'
 
-import WebSocket from 'ws';
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
-import { Queue } from "./queue";
+import WebSocket from 'ws'
+import path from 'node:path'
+import fs from 'node:fs'
+import os from 'node:os'
+import { Queue } from './queue'
 import jjs from '@/jjsPlugin'
 
 Object.assign(global, { WebSocket: WebSocket })
@@ -22,9 +22,9 @@ if (!fs.existsSync(TEMP_DIR)) {
 }
 
 // Environment variables
-const PORT = Number(process.env.PORT) || 3000;
-const ACCESS_KEY = process.env.ACCESS_KEY || 'test';
-const SECRET_KEY = process.env.SECRET_KEY || 'test';
+const PORT = Number(process.env.PORT) || 3000
+const ACCESS_KEY = process.env.ACCESS_KEY || 'test'
+const SECRET_KEY = process.env.SECRET_KEY || 'test'
 const BASE_FOLDER = process.env.BASE_FOLDER || 'S3Buckets'
 
 // Initialize Fastify server
@@ -44,15 +44,15 @@ const server: { jjs?: any } & FastifyInstance = fastify({
 
 // Add XML content type parser
 server.addContentTypeParser('application/xml', { parseAs: 'string' }, (req, body, done) => {
-    try {
-        // Parse XML to JS object using your XML parser
-        const xmlParser = new XMLParser({/* options */ });
-        const parsedXml = xmlParser.parse(body);
-        done(null, parsedXml);
-    } catch (error: any) {
-        done(error, undefined);
-    }
-});
+  try {
+    // Parse XML to JS object using your XML parser
+    const xmlParser = new XMLParser({/* options */ })
+    const parsedXml = xmlParser.parse(body)
+    done(null, parsedXml)
+  } catch (error: any) {
+    done(error, undefined)
+  }
+})
 
 server.addContentTypeParser('application/octet-stream', function(request: any, payload: NodeJS.ReadableStream, done: (err: Error | null, result?: Buffer) => void) {
   const data: Buffer[] = []
@@ -180,11 +180,11 @@ server.put('/:bucket/', {
   try {
     const { bucket } = request.params as { bucket: string }
 
-        // Create folder
-        await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}` })
-        await processQueue.add(() => server.jjs.createFolders({ names: bucket }))
-        await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}` })
-        await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}/${bucket}` })
+    // Create folder
+    await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}` })
+    await processQueue.add(() => server.jjs.createFolders({ names: bucket }))
+    await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}` })
+    await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}/${bucket}` })
 
     reply.status(200).send()
   } catch (err) {
@@ -200,8 +200,8 @@ server.delete('/:bucket/', {
   try {
     const { bucket } = request.params as { bucket: string }
 
-        // Delete folder
-        await processQueue.add(() => server.jjs.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}` }));
+    // Delete folder
+    await processQueue.add(() => server.jjs.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}` }))
 
     reply.status(204).send()
   } catch (err) {
@@ -221,8 +221,8 @@ server.delete('/:bucket/*', {
     // Extract the object key from the URL (everything after the bucket)
     const encodedObjectKey = encodeObjectName(key)
 
-        // Delete file
-        await processQueue.add(() => server.jjs.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}/${encodedObjectKey}` }));
+    // Delete file
+    await processQueue.add(() => server.jjs.deleteTargets({ targets: `Home/${BASE_FOLDER}/${bucket}/${encodedObjectKey}` }))
 
     reply.status(204).send()
   } catch (err) {
@@ -232,124 +232,129 @@ server.delete('/:bucket/*', {
 })
 
 
-
 const multiParts: Record<string, number> = {}
 
 // Multipart form upload
 server.post('/:bucket/*', {
-    preHandler: authenticate
+  preHandler: authenticate,
 }, async (request, reply) => {
-    try {
-        const { bucket } = request.params as { bucket: string };
-        const sourceUrl = request.url.split("?")[0];
-        const key = sourceUrl.split(`/${bucket}/`)[1];
-        const encodedObjectKey = encodeObjectName(key);
+  try {
+    const { bucket } = request.params as { bucket: string }
+    const sourceUrl = request.url.split('?')[0]
+    const key = sourceUrl.split(`/${bucket}/`)[1]
+    const encodedObjectKey = encodeObjectName(key)
 
-        const query = request.query as any;
-        console.log(query);
-        const uploadId = query.uploadId;
+    const query = request.query as any
+    console.log(query)
+    const uploadId = query.uploadId
 
-        if (uploadId) { // completing file upload
-            // Make sure the multipart upload exists
-            if (!(encodedObjectKey in multiParts)) {
-                reply.status(404).send(createS3ErrorResponse("NoSuchUpload", "Upload does not exist"));
-                return;
-            }
+    if (uploadId) { // completing file upload
+      // Make sure the multipart upload exists
+      if (!(encodedObjectKey in multiParts)) {
+        reply.status(404).send(createS3ErrorResponse('NoSuchUpload', 'Upload does not exist'))
+        return
+      }
 
-            const count = multiParts[encodedObjectKey];
-            const outputFilePath = path.join(TEMP_DIR, `complete-${encodedObjectKey}`);
+      const count = multiParts[encodedObjectKey]
+      const outputFilePath = path.join(TEMP_DIR, `complete-${encodedObjectKey}`)
 
-            // Stream approach for large files
-            const writeStream = fs.createWriteStream(outputFilePath);
+      // Stream approach for large files
+      const writeStream = fs.createWriteStream(outputFilePath)
 
-            try {
-                // Process each part sequentially
-                for (let i = 1; i <= count; i++) {
-                    const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`);
+      try {
+        // Process each part sequentially
+        for (let i = 1; i <= count; i++) {
+          const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`)
 
-                    if (!fs.existsSync(tempFilePath)) {
-                        throw new Error(`Part ${i} missing: ${tempFilePath}`);
-                    }
+          if (!fs.existsSync(tempFilePath)) {
+            throw new Error(`Part ${i} missing: ${tempFilePath}`)
+          }
 
-                    // Use pipe to efficiently stream each part to the output file
-                    await new Promise<void>((resolve, reject) => {
-                        const readStream = fs.createReadStream(tempFilePath);
-                        readStream.pipe(writeStream, { end: false });
-                        readStream.on('end', resolve);
-                        readStream.on('error', reject);
-                    });
-                }
-
-                // Close the write stream
-                writeStream.end();
-
-                // Wait for the write to complete
-                await new Promise<void>((resolve) => writeStream.on('close', resolve));
-
-const smallPath = `Home/${BASE_FOLDER}/${bucket}`
-                await server.jjs.loadDirectory({ path: smallPath })
-
-                const callback = async () => {
-                    // Clean up temp files
-                    for (let i = 1; i <= count; i++) {
-                        const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`);
-                        try { fs.unlinkSync(tempFilePath); } catch { /* ignore */ }
-                    }
-                    try { fs.unlinkSync(outputFilePath); } catch { /* ignore */ }
-
-                    // Remove the multipart entry
-                    delete multiParts[encodedObjectKey];
-
-                    reply.status(200).send();
-                };
-
-                // Create a BinaryLike object using fs.promises.readFile
-                // For large files, you may need to use additional approaches
-                // such as streaming through a transformation pipeline
-                const fileContent = await fs.promises.readFile(outputFilePath);
-
-                // Create File object for Jackal
-                const file = new File(
-                    [fileContent],
-                    encodedObjectKey,
-                    {
-                        type: request.headers['content-type'] || 'application/octet-stream',
-                        lastModified: Date.now()
-                    }
-                );
-
-                console.log("FILE: ", file.size, file.name);
-
-                // Upload file
-                await server.jjs.queuePrivate(file);
-                await processQueue.add(() => server.jjs.processAllQueues({callback}));
-                await server.jjs.loadDirectory({path: smallPath});
-                return;
-            } catch (err) {
-                writeStream.destroy();
-                throw err;
-            }
+          // Use pipe to efficiently stream each part to the output file
+          await new Promise<void>((resolve, reject) => {
+            const readStream = fs.createReadStream(tempFilePath)
+            readStream.pipe(writeStream, { end: false })
+            readStream.on('end', resolve)
+            readStream.on('error', reject)
+          })
         }
 
-        // New file upload
-        multiParts[encodedObjectKey] = 0;
+        // Close the write stream
+        writeStream.end()
 
-        const response = builder.build({
-            InitiateMultipartUploadResult: {
-                "@_xmlns": 'http://s3.amazonaws.com/doc/2006-03-01/',
-                Bucket: bucket,
-                Key: key,
-                UploadId: encodedObjectKey,
+        // Wait for the write to complete
+        await new Promise<void>((resolve) => writeStream.on('close', resolve))
+
+        const smallPath = `Home/${BASE_FOLDER}/${bucket}`
+        await server.jjs.loadDirectory({ path: smallPath })
+
+        const callback = async () => {
+          // Clean up temp files
+          for (let i = 1; i <= count; i++) {
+            const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`)
+            try {
+              fs.unlinkSync(tempFilePath)
+            } catch { /* ignore */
             }
-        });
+          }
+          try {
+            fs.unlinkSync(outputFilePath)
+          } catch { /* ignore */
+          }
 
-        reply.header('Content-Type', 'application/xml');
-        reply.send(response);
-    } catch (err) {
-        request.log.error(err);
-        reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to upload object"));
+          // Remove the multipart entry
+          delete multiParts[encodedObjectKey]
+
+          reply.status(200).send()
+        }
+
+        // Create a BinaryLike object using fs.promises.readFile
+        // For large files, you may need to use additional approaches
+        // such as streaming through a transformation pipeline
+        const fileContent = await fs.promises.readFile(outputFilePath)
+
+        // Create File object for Jackal
+        const file = new File(
+          [fileContent],
+          encodedObjectKey,
+          {
+            type: request.headers['content-type'] || 'application/octet-stream',
+            lastModified: Date.now(),
+          },
+        )
+
+        console.log('FILE: ', file.size, file.name)
+
+        // Upload file
+        await server.jjs.queuePrivate(file)
+        await processQueue.add(() => server.jjs.processAllQueues({ callback }))
+        await server.jjs.loadDirectory({ path: smallPath })
+        return
+      } catch (err) {
+        writeStream.destroy()
+        throw err
+      }
     }
-});
+
+    // New file upload
+    multiParts[encodedObjectKey] = 0
+
+    const response = builder.build({
+      InitiateMultipartUploadResult: {
+        '@_xmlns': 'http://s3.amazonaws.com/doc/2006-03-01/',
+        Bucket: bucket,
+        Key: key,
+        UploadId: encodedObjectKey,
+      },
+    })
+
+    reply.header('Content-Type', 'application/xml')
+    reply.send(response)
+  } catch (err) {
+    request.log.error(err)
+    reply.status(500).send(createS3ErrorResponse('InternalError', 'Failed to upload object'))
+  }
+})
 
 // Upload object
 server.put('/:bucket/*', {
@@ -362,50 +367,50 @@ server.put('/:bucket/*', {
     // Extract the object key from the URL (everything after the bucket)
     const encodedObjectKey = encodeObjectName(key)
 
-        const query = request.query as any;
-        console.log(query)
-        const uploadId = query.uploadId;
-        const partNumber = query.partNumber;
-        console.log("upload details", uploadId, partNumber)
-        if (uploadId) {
+    const query = request.query as any
+    console.log(query)
+    const uploadId = query.uploadId
+    const partNumber = query.partNumber
+    console.log('upload details', uploadId, partNumber)
+    if (uploadId) {
 
-            if (encodedObjectKey in multiParts) {
-                const count = multiParts[encodedObjectKey];
-                multiParts[encodedObjectKey] = count + 1
+      if (encodedObjectKey in multiParts) {
+        const count = multiParts[encodedObjectKey]
+        multiParts[encodedObjectKey] = count + 1
 
-                // writing part to disk
-                const tempFilePath = path.join(TEMP_DIR, `${partNumber}-${path.basename(encodedObjectKey)}`);
-                const data = request.body as Buffer;
-                fs.writeFileSync(tempFilePath, data);
+        // writing part to disk
+        const tempFilePath = path.join(TEMP_DIR, `${partNumber}-${path.basename(encodedObjectKey)}`)
+        const data = request.body as Buffer
+        fs.writeFileSync(tempFilePath, data)
 
-                return
-            } else {
-                reply.status(500).send(createS3ErrorResponse("InternalError", "Failed to find upload"));
-            }
-            return
-        }
+        return
+      } else {
+        reply.status(500).send(createS3ErrorResponse('InternalError', 'Failed to find upload'))
+      }
+      return
+    }
 
-        const tempFilePath = path.join(TEMP_DIR, `${Date.now()}-${path.basename(encodedObjectKey)}`);
+    const tempFilePath = path.join(TEMP_DIR, `${Date.now()}-${path.basename(encodedObjectKey)}`)
 
     const data = request.body as Buffer
     fs.writeFileSync(tempFilePath, data)
 
-        const sourceFile = fs.readFileSync(tempFilePath)
+    const sourceFile = fs.readFileSync(tempFilePath)
 
-        // Create File object for Jackal
-        const file = new File(
-            [sourceFile],
-            encodedObjectKey,
-            {
-                type: request.headers['content-type'] || 'application/octet-stream',
-                lastModified: Date.now()
-            }
-        );
+    // Create File object for Jackal
+    const file = new File(
+      [sourceFile],
+      encodedObjectKey,
+      {
+        type: request.headers['content-type'] || 'application/octet-stream',
+        lastModified: Date.now(),
+      },
+    )
 
-        console.log("FILE: ", file.size, file.name)
+    console.log('FILE: ', file.size, file.name)
 
-        // Change directory to the bucket
-        const mainPath = `Home/${BASE_FOLDER}/${bucket}`
+    // Change directory to the bucket
+    const mainPath = `Home/${BASE_FOLDER}/${bucket}`
 
     await server.jjs.loadDirectory({ path: mainPath })
 
@@ -413,10 +418,10 @@ server.put('/:bucket/*', {
       reply.status(200).send()
     }
 
-        // Upload file
-        await server.jjs.queuePrivate(file)
-        await processQueue.add(() => server.jjs.processAllQueues({ callback }))
-        await server.jjs.loadDirectory({ path: mainPath })
+    // Upload file
+    await server.jjs.queuePrivate(file)
+    await processQueue.add(() => server.jjs.processAllQueues({ callback }))
+    await server.jjs.loadDirectory({ path: mainPath })
 
   } catch (err) {
     request.log.error(err)
@@ -437,7 +442,7 @@ server.get('/:bucket/*', {
     const encodedObjectKey = encodeObjectName(key)
 
 
-        await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}/${bucket}` })
+    await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}/${bucket}` })
 
     // Construct the path
     const filePath = `Home/${BASE_FOLDER}/${bucket}/${encodedObjectKey}`
