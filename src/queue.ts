@@ -25,33 +25,30 @@ export class Queue {
 
       // Start processing if not already running
       if (!this.isProcessing) {
-        this.processNext()
+        this.process()
       }
     })
+  }
+
+  private async process(): Promise<void> {
+    this.isProcessing = true
+    while (this.taskQueue.length === 0) {
+      await this.processOne()
+    }
+    this.isProcessing = false
   }
 
   /**
    * Process the next task in the queue
    */
-  private async processNext(): Promise<void> {
-    if (this.taskQueue.length === 0) {
-      this.isProcessing = false
-      return
-    }
-
-    this.isProcessing = true
-
+  private async processOne(): Promise<void> {
     const { task, resolve, reject } = this.taskQueue.shift()!
-
     try {
       // Execute the task and pass the result to the original caller
       const result = await task()
       resolve(result)
-    } catch (error) {
-      reject(error)
+    } catch (err) {
+      reject(err)
     }
-
-    // Process the next task
-    await this.processNext()
   }
 }
