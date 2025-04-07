@@ -143,6 +143,7 @@ async function openFolder(path: string, count: number = 0): Promise<void> {
     try {
         await storageHandler.loadDirectory({ path });
     } catch (error) {
+        console.error(error)
         console.log("Failed to load folder, trying again", path);
         await new Promise(resolve => setTimeout(resolve, 1000));
         return openFolder(path, count + 1);
@@ -310,79 +311,68 @@ server.post('/:bucket/*', {
             }
 
             const count = multiParts[encodedObjectKey];
-            const outputFilePath = path.join(TEMP_DIR, `complete-${encodedObjectKey}`);
 
-            // Stream approach for large files
-            const writeStream = fs.createWriteStream(outputFilePath);
+            // Change directory to the bucket
+            const p = `Home/${BASE_FOLDER}/${bucket}`;
+            await openFolder(p);
 
-            try {
-                // Process each part sequentially
+            const k = async () => {
+                // Clean up temp files
                 for (let i = 1; i <= count; i++) {
                     const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`);
-
-                    if (!fs.existsSync(tempFilePath)) {
-                        throw new Error(`Part ${i} missing: ${tempFilePath}`);
-                    }
-
-                    // Use pipe to efficiently stream each part to the output file
-                    await new Promise<void>((resolve, reject) => {
-                        const readStream = fs.createReadStream(tempFilePath);
-                        readStream.pipe(writeStream, { end: false });
-                        readStream.on('end', resolve);
-                        readStream.on('error', reject);
-                    });
+                    try { fs.unlinkSync(tempFilePath); } catch (e) { /* ignore */ }
                 }
 
-                // Close the write stream
-                writeStream.end();
+                // Remove the multipart entry
+                delete multiParts[encodedObjectKey];
 
-                // Wait for the write to complete
-                await new Promise<void>((resolve) => writeStream.on('close', resolve));
+                reply.status(200).send();
+            };
 
-                // Change directory to the bucket
-                const p = `Home/${BASE_FOLDER}/${bucket}`;
-                await openFolder(p);
-
-                const k = async () => {
-                    // Clean up temp files
-                    for (let i = 1; i <= count; i++) {
-                        const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`);
-                        try { fs.unlinkSync(tempFilePath); } catch (e) { /* ignore */ }
-                    }
-                    try { fs.unlinkSync(outputFilePath); } catch (e) { /* ignore */ }
-
-                    // Remove the multipart entry
-                    delete multiParts[encodedObjectKey];
-
-                    reply.status(200).send();
-                };
-
-                // Create a BinaryLike object using fs.promises.readFile
-                // For large files, you may need to use additional approaches
-                // such as streaming through a transformation pipeline
-                const fileContent = await fs.promises.readFile(outputFilePath);
-
-                // Create File object for Jackal
-                const file = new File(
-                    [fileContent],
-                    encodedObjectKey,
-                    {
-                        type: request.headers['content-type'] || 'application/octet-stream',
-                        lastModified: Date.now()
-                    }
-                );
-
-                console.log("FILE: ", file.size, file.name);
-
-                // Upload file
-                await storageHandler.queuePrivate(file);
-                await q.add(() => storageHandler.processAllQueues({callback: k}));
-                await storageHandler.loadDirectory({path: p});
-                return;
-            } catch (error) {
-                writeStream.destroy();
-                throw error;
+            for (let i = 1; i <= count; i++) {
+                const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`);
+                if (!fs.existsSync(tempFilePath)) {
+                    throw new Error(`Part ${i} missing: ${tempFilePath}`);
+                }
             }
+
+            // Create a File object with a blob iterator that will load chunks as needed
+            const blobParts: Blob[] = [];
+
+            // Add each part as a Blob
+            for (let i = 1; i <= count; i++) {
+                const tempFilePath = path.join(TEMP_DIR, `${i}-${path.basename(encodedObjectKey)}`);
+                const partData = await fs.promises.readFile(tempFilePath);
+                blobParts.push(new Blob([partData]));
+            }
+
+            console.log("blob array created successfully...");
+
+            // Create a single Blob from all parts
+            const fileBlob = new Blob(blobParts, {
+                type: request.headers['content-type'] || 'application/octet-stream'
+            });
+
+            console.log("blob finalized...");
+
+
+            // Create the File object
+            const file = new File(
+                [fileBlob],
+                encodedObjectKey,
+                {
+                    type: request.headers['content-type'] || 'application/octet-stream',
+                    lastModified: Date.now()
+                }
+            );
+
+            console.log("FILE: ", file.size, file.name);
+
+            // Upload file
+            await storageHandler.queuePrivate(file);
+            await q.add(() => storageHandler.processAllQueues({callback: k}));
+            await storageHandler.loadDirectory({path: p});
+            return;
         }
 
         // New file upload
