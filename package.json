@@ -4,7 +4,7 @@
   "description": "S3-compatible server that wraps Jackal.js",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tscpaths -p tsconfig.json -s ./src -o ./dist",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --inspect=4321 src/index.ts"
   },
@@ -30,6 +30,7 @@
     "@types/ws": "^8.18.0",
     "pino-pretty": "^13.0.0",
     "ts-node-dev": "^2.0.0",
+    "tscpaths": "^0.0.9",
     "typescript": "^5.1.6"
   }
 }
