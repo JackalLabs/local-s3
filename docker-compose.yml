@@ -8,12 +8,15 @@ services:
     container_name: jackal-s3
     restart: always
     ports:
-      - "3010:3000"
+      - 3010:${PORT}
     environment:
-      - JACKAL_MNEMONIC=${JACKAL_MNEMONIC}
-      - ACCESS_KEY_ID=jackal
-      - SECRET_ACCESS_KEY=jackalsecret
-      - PORT=3000
+      - JACKAL_TESTNET_WALLET_MNEMONIC=${JACKAL_TESTNET_WALLET_MNEMONIC}
+      - JACKAL_MAINNET_WALLET_MNEMONIC=${JACKAL_MAINNET_WALLET_MNEMONIC}
+      - ACCESS_KEY=${ACCESS_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - PORT=${PORT}
+      - NETWORK=${NETWORK}
+      - BASE_FOLDER=${BASE_FOLDER}
     volumes:
       - jackal-s3:/tmp/jackal-s3
 
