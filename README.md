@@ -46,10 +46,19 @@ This is an S3-compatible server that wraps the Jackal.js library, enabling you t
 
 ## Development
 
-For development, you can use the watch mode:
+For development, you can use the watch mode (currently broken):
 
 ```
 npm run dev
+```
+
+Or you can build the Docker container and then run test scripts
+```
+export JACKAL_TESTNET_WALLET_MNEMONIC=[your seed]
+export JACKAL_MAINNET_WALLET_MNEMONIC=[your seed]
+docker build .
+docker-compose up
+node test.mjs
 ```
 
 ## Using with S3 Clients
