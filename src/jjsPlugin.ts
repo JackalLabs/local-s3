@@ -36,6 +36,7 @@ async function fastifyJackalJS(fastify: any, _: any) {
       await storageHandler.loadDirectory({ path: `Home/${BASE_FOLDER}` })
     }
 
+    console.log("Provider pool: ", initPool);
     await storageHandler.loadProviderPool(initPool)
 
     console.log('Jackal.js client initialized successfully')
@@ -52,6 +53,6 @@ async function fastifyJackalJS(fastify: any, _: any) {
   }
 }
 
-export default fastifyPlugin(async function(fastify: any, opts: any) {
+export default fastifyPlugin(async function (fastify: any, opts: any) {
   await fastifyJackalJS(fastify, opts)
 })
