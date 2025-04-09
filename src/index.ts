@@ -12,6 +12,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import { Queue } from './queue'
 import jjs from '@/jjsPlugin'
+import aws4 from 'aws4'
 
 Object.assign(global, { WebSocket: WebSocket })
 dotenv.config()
@@ -54,7 +55,7 @@ server.addContentTypeParser('application/xml', { parseAs: 'string' }, (req, body
   }
 })
 
-server.addContentTypeParser('application/octet-stream', function(request: any, payload: NodeJS.ReadableStream, done: (err: Error | null, result?: Buffer) => void) {
+server.addContentTypeParser('application/octet-stream', function (request: any, payload: NodeJS.ReadableStream, done: (err: Error | null, result?: Buffer) => void) {
   const data: Buffer[] = []
   payload.on('data', (chunk: Buffer) => {
     data.push(chunk)
@@ -68,7 +69,7 @@ server.addContentTypeParser('application/octet-stream', function(request: any, p
   })
 })
 
-server.addContentTypeParser('*', function(request, payload, done) {
+server.addContentTypeParser('*', function (request, payload, done) {
   // Skip if we have a specialized handler for this content type
   if (!request.headers['content-type']) {
     done(null)
@@ -147,30 +148,36 @@ function decodeObjectName(encodedName: string): string {
 
 
 async function authenticate(request: FastifyRequest, reply: FastifyReply) {
-  return
-  // try {
-  //     const authHeader = request.headers.authorization;
-  //
-  //     // Log entire headers for debugging
-  //     console.log("Request headers:", request.headers);
-  //
-  //     if (!authHeader) {
-  //         // Allow anonymous access for initial bucket operations from Restic
-  //         if (request.method === 'HEAD' || request.method === 'GET') {
-  //             return;
-  //         }
-  //         return reply.status(401).send({ error: 'Missing authorization header' });
-  //     }
-  //
-  //     if (authHeader.includes(ACCESS_KEY)) {
-  //         return;
-  //     }
-  //
-  //     return reply.status(403).send({ error: 'Invalid authorization' });
-  // } catch (error) {
-  //     request.log.error(error);
-  //     return reply.status(500).send({ error: 'Authentication error' });
-  // }
+  try {
+    delete request.headers['content-length']; // aws-sdk includes header but does not use in signature
+    const requestSig = request.headers.authorization;
+    const requestObject = request.body as Buffer || {};
+    const requestBody = Object.keys(requestObject).length == 0 ? '' : requestObject;
+
+    // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+    const calcBody = aws4.sign({
+      hostname: request.hostname,
+      method: request.method,
+      path: request.url,
+      body: requestBody,
+      service: 's3',
+      headers: request.headers
+    }, {
+      'accessKeyId': ACCESS_KEY,
+      'secretAccessKey': SECRET_KEY
+    }).headers;
+    const calcSig = calcBody ? calcBody['Authorization'] : '';
+
+    if (requestSig === calcSig) {
+      return;
+    }
+    console.log(requestSig, calcSig);
+    return reply.status(401).send(createS3ErrorResponse('UnauthorizedAccess', 'Invalid credentials'));
+  }
+  catch (error) {
+    request.log.error(error);
+    return reply.status(500).send(createS3ErrorResponse('InternalError', 'Authentication error'));
+  }
 }
 
 // CreateBucket - Creates a folder in Jackal.js
