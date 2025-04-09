@@ -56,6 +56,8 @@ Or you can build the Docker container and then run test scripts
 ```
 export JACKAL_TESTNET_WALLET_MNEMONIC=[your seed]
 export JACKAL_MAINNET_WALLET_MNEMONIC=[your seed]
+export ACCESS_KEY=[your access key]
+export SECRET_KEY=[your secret key]
 docker build .
 docker-compose up
 node test.mjs
@@ -117,7 +119,6 @@ async function downloadFile() {
 ## Limitations
 
 - Advanced query parameters for listing operations are not fully implemented
-- This is designed for local usage and has minimal authentication security
 - File versioning is not supported
 - Multipart uploads are not supported
 

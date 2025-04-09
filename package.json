@@ -20,6 +20,7 @@
     "@aws-sdk/client-s3": "^3.782.0",
     "@fastify/cors": "^8.3.0",
     "@jackallabs/jackal.js": "file:jackallabs-jackal.js-3.6.0.tgz",
+    "aws4": "^1.13.2",
     "dotenv": "^16.3.1",
     "fast-xml-parser": "^4.2.5",
     "fastify": "^4.19.2",
@@ -27,6 +28,7 @@
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@types/aws4": "^1.11.6",
     "@types/node": "^20.4.2",
     "@types/ws": "^8.18.0",
     "pino-pretty": "^13.0.0",
