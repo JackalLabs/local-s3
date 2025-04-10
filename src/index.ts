@@ -146,13 +146,20 @@ function decodeObjectName(encodedName: string): string {
   return Buffer.from(encodedName, 'base64url').toString()
 }
 
+function extractSig(authorization: string | undefined): string {
+  if (authorization === undefined) {
+    return '';
+  }
+  return authorization.split('Signature=')[1];
+}
 
 async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   try {
-    delete request.headers['content-length']; // aws-sdk includes header but does not use in signature
     const requestSig = request.headers.authorization;
     const requestObject = request.body as Buffer || {};
     const requestBody = Object.keys(requestObject).length == 0 ? '' : requestObject;
+    // filter headers from third-party s3 integrations
+    const requestHeaders = Object.fromEntries(Object.entries(request.headers).filter(([k]) => requestSig?.includes(k)));
 
     // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
     const calcBody = aws4.sign({
@@ -161,20 +168,20 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply) {
       path: request.url,
       body: requestBody,
       service: 's3',
-      headers: request.headers
+      headers: requestHeaders,
     }, {
       'accessKeyId': ACCESS_KEY,
       'secretAccessKey': SECRET_KEY
     }).headers;
-    const calcSig = calcBody ? calcBody['Authorization'] : '';
+    const calcSig = calcBody ? calcBody['Authorization']?.toString() : '';
 
-    if (requestSig === calcSig) {
+    if (extractSig(requestSig) === extractSig(calcSig)) {
       return;
     }
+    // signature mismatch
     console.log(requestSig, calcSig);
     return reply.status(401).send(createS3ErrorResponse('UnauthorizedAccess', 'Invalid credentials'));
-  }
-  catch (error) {
+  } catch (error) {
     request.log.error(error);
     return reply.status(500).send(createS3ErrorResponse('InternalError', 'Authentication error'));
   }
