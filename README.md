@@ -5,9 +5,10 @@ This is an S3-compatible server that wraps the Jackal.js library, enabling you t
 ## Features
 
 - S3-compatible API endpoints
-- Base64URL encoding of object names to handle slashes and special characters
-- Local authentication via environment variables
+- Base64URL encoding of object names to handle special characters
+- Local/network authentication via environment variables
 - Works with standard S3 clients and libraries
+- Tested with [AWS SDKs](https://aws.amazon.com/developer/tools/), [Cyberduck](https://cyberduck.io/), and [Rclone](https://rclone.org/)
 
 ## Supported Endpoints
 
