@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc && tscpaths -p tsconfig.json -s ./src -o ./dist",
     "start": "node dist/index.js",
-    "dev": "ts-node-dev --inspect=4321 src/index.ts"
+    "dev": "ts-node-dev --inspect=4321 src/index.ts",
+    "run": "npm run build && npm run start"
   },
   "keywords": [
     "jackal",

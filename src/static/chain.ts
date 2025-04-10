@@ -9,8 +9,10 @@ export const mainnet: IClientSetup = {
   chainConfig: {
     chainId: mainnetChainID,
     chainName: 'Jackal Main Net',
-    rpc: 'https://jklrpc.squirrellogic.com',
-    rest: 'https://jklapi.squirrellogic.com',
+    // rpc: 'https://jklrpc.squirrellogic.com',
+    // rest: 'https://jklapi.squirrellogic.com',
+    rpc: 'https://rpc.jackalprotocol.com',
+    rest: 'https://api.jackalprotocol.com',
     bip44: {
       coinType: 118,
     },
@@ -49,7 +51,8 @@ export const mainnet: IClientSetup = {
     features: [],
   },
   chainId: mainnetChainID,
-  endpoint: 'https://jklrpc.squirrellogic.com',
+  endpoint: 'https://rpc.jackalprotocol.com',
+  // endpoint: 'https://jklrpc.squirrellogic.com',
   options: {},
   networks: ['jackal'],
   selectedWallet: 'mnemonic',
