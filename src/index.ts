@@ -155,6 +155,7 @@ function extractSig(authorization: string | undefined): string {
 
 async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   try {
+    delete request.headers['content-length'];
     const requestSig = request.headers.authorization;
     const requestObject = request.body as Buffer || {};
     const requestBody = Object.keys(requestObject).length == 0 ? '' : requestObject;
