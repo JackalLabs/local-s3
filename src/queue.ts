@@ -25,7 +25,7 @@ export class Queue {
 
   private async process(): Promise<void> {
     this.isProcessing = true
-    while (this.taskQueue.length === 0) {
+    while (this.taskQueue.length > 0) {
       await this.processOne()
     }
     this.isProcessing = false
