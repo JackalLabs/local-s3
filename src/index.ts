@@ -574,7 +574,14 @@ server.get('/:bucket/', {
     const fetchOwner = query['fetch-owner'] === 'true'
 
     // Navigate to the bucket
-    await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}/${bucket}` })
+    try {
+      await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}/${bucket}` })
+    } catch (err) {
+      request.log.error(err)
+      reply.status(404).send(createS3ErrorResponse('NoSuchBucket', 'The specified bucket does not exist.'))
+      return
+    }
+
 
     // Get files and folders
     const files = server.jjs.listChildFileMetas()
