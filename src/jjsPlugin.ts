@@ -49,10 +49,15 @@ async function fastifyJackalJS(fastify: any, _: any) {
         }
       })
   } catch (err) {
-    console.error(err)
+    throw err
   }
 }
 
 export default fastifyPlugin(async function (fastify: any, opts: any) {
-  await fastifyJackalJS(fastify, opts)
+  try {
+    await fastifyJackalJS(fastify, opts)
+  } catch (err) {
+    console.error(err)
+  }
+
 })

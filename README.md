@@ -5,9 +5,10 @@ This is an S3-compatible server that wraps the Jackal.js library, enabling you t
 ## Features
 
 - S3-compatible API endpoints
-- Base64URL encoding of object names to handle slashes and special characters
-- Local authentication via environment variables
+- Base64URL encoding of object names to handle special characters
+- Local/network authentication via environment variables
 - Works with standard S3 clients and libraries
+- Tested with [AWS SDKs](https://aws.amazon.com/developer/tools/), [Cyberduck](https://cyberduck.io/), and [Rclone](https://rclone.org/)
 
 ## Supported Endpoints
 
@@ -56,6 +57,8 @@ Or you can build the Docker container and then run test scripts
 ```
 export JACKAL_TESTNET_WALLET_MNEMONIC=[your seed]
 export JACKAL_MAINNET_WALLET_MNEMONIC=[your seed]
+export ACCESS_KEY=[your access key]
+export SECRET_KEY=[your secret key]
 docker build .
 docker-compose up
 node test.mjs
@@ -117,7 +120,6 @@ async function downloadFile() {
 ## Limitations
 
 - Advanced query parameters for listing operations are not fully implemented
-- This is designed for local usage and has minimal authentication security
 - File versioning is not supported
 - Multipart uploads are not supported
 
