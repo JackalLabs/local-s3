@@ -1,11 +1,14 @@
 # Jackal.js S3 Compatible Server
 
-This is an S3-compatible server that wraps the Jackal.js library, enabling you to use S3 clients with Jackal storage.
+> [!IMPORTANT]  
+> This software is in beta and may not work perfectly with every S3 connected application. See [Tested Software](./TESTED.md) for a full list of integrations tested by Jackal Labs. If you find a piece of software that isn't working, please create an issue.
+
+
+This is an S3-compatible server (path style) that wraps the Jackal.js library, enabling you to use S3 clients with Jackal storage.
 
 ## Features
 
 - S3-compatible API endpoints
-- Base64URL encoding of object names to handle special characters
 - Local/network authentication via environment variables
 - Works with standard S3 clients and libraries
 - Tested with [AWS SDKs](https://aws.amazon.com/developer/tools/), [Cyberduck](https://cyberduck.io/), and [Rclone](https://rclone.org/)
@@ -20,12 +23,16 @@ This is an S3-compatible server that wraps the Jackal.js library, enabling you t
 - ListObjects - `GET /:bucket`
 - HeadBucket - `HEAD /:bucket`
 - HeadObject - `HEAD /:bucket/*`
+- CreateMultipartUpload - `POST /:bucket`
 
 ## Setup
 
 1. Clone this repository
-2. Install dependencies:
+   ```shell
+   git clone https://github.com/JackalLabs/local-s3.git
    ```
+2. Install dependencies:
+   ```shell
    npm install
    ```
 3. Create a `.env` file based on `.env.example`:
@@ -47,14 +54,13 @@ This is an S3-compatible server that wraps the Jackal.js library, enabling you t
 
 ## Development
 
-For development, you can use the watch mode (currently broken):
-
-```
-npm run dev
+The following will build and run the service:
+```shell
+npm run run
 ```
 
 Or you can build the Docker container and then run test scripts
-```
+```shell
 export JACKAL_TESTNET_WALLET_MNEMONIC=[your seed]
 export JACKAL_MAINNET_WALLET_MNEMONIC=[your seed]
 export ACCESS_KEY=[your access key]
@@ -121,7 +127,6 @@ async function downloadFile() {
 
 - Advanced query parameters for listing operations are not fully implemented
 - File versioning is not supported
-- Multipart uploads are not supported
 
 ## License
 
