@@ -11,7 +11,7 @@ This is an S3-compatible server (path style) that wraps the Jackal.js library, e
 - S3-compatible API endpoints
 - Local/network authentication via environment variables
 - Works with standard S3 clients and libraries
-- Tested with [AWS SDKs](https://aws.amazon.com/developer/tools/), [Cyberduck](https://cyberduck.io/), and [Rclone](https://rclone.org/)
+- Tested with [AWS SDKs](https://aws.amazon.com/developer/tools/), [Cyberduck](https://cyberduck.io/), and [Rclone](https://rclone.org/), and [more!](./TESTED.md)
 
 ## Supported Endpoints
 
