@@ -395,6 +395,7 @@ server.post('/:bucket/*', {
 server.put('/:bucket/*', {
   preHandler: authenticate,
 }, async (request, reply) => {
+  let failed = false
   try {
     const { bucket } = request.params as { bucket: string }
     const sourceUrl = request.url.split('?')[0]
@@ -450,7 +451,9 @@ server.put('/:bucket/*', {
     await server.jjs.loadDirectory({ path: mainPath })
 
     const callback = () => {
-      reply.status(200).send()
+      if (!failed) {
+        reply.status(200).send()
+      }
     }
 
     // Upload file
@@ -458,7 +461,9 @@ server.put('/:bucket/*', {
     await processQueue.add(() => server.jjs.processAllQueues({ callback }))
     await server.jjs.loadDirectory({ path: mainPath })
 
+    return reply
   } catch (err) {
+    failed = true
     request.log.error(err)
     reply.status(500).send(createS3ErrorResponse('InternalError', 'Failed to upload object'))
   }
