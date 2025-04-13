@@ -180,6 +180,27 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply) {
     }
     // signature mismatch
     console.log(requestSig, calcSig);
+
+    // could be mountainduck
+    const calcBody2 = aws4.sign({
+      hostname: request.hostname,
+      method: request.method,
+      path: request.url,
+      body: requestBody,
+      service: 's3',
+      headers: requestHeaders,
+      // @ts-ignore
+      extraHeadersToIgnore: { 'content-length': true },
+    }, {
+      'accessKeyId': ACCESS_KEY,
+      'secretAccessKey': SECRET_KEY
+    }).headers;
+    const calcSig2 = calcBody2 ? calcBody2['Authorization']?.toString() : '';
+
+    if (extractSig(requestSig) === extractSig(calcSig2)) {
+      return;
+    }
+
     return reply.status(401).send(createS3ErrorResponse('UnauthorizedAccess', 'Invalid credentials'));
   } catch (error) {
     request.log.error(error);
@@ -574,7 +595,14 @@ server.get('/:bucket/', {
     const fetchOwner = query['fetch-owner'] === 'true'
 
     // Navigate to the bucket
-    await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}/${bucket}` })
+    try {
+      await server.jjs.loadDirectory({ path: `Home/${BASE_FOLDER}/${bucket}` })
+    } catch (err) {
+      request.log.error(err)
+      reply.status(404).send(createS3ErrorResponse('NoSuchBucket', 'The specified bucket does not exist.'))
+      return
+    }
+
 
     // Get files and folders
     const files = server.jjs.listChildFileMetas()
